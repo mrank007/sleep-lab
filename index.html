@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sleep Lab — your nights, explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Karla:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink:#100e1f; --ink-2:#1a1730; --panel:#211d3d; --panel-2:#2a2550;
+    --text:#eae6ff; --text-dim:#a49ccc; --text-faint:#726b99;
+    --deep:#2e6ff2; --light-s:#6f7fc9; --rem:#b57ef5; --awake:#d9975c;
+    --dawn:#ffd9a8; --good:#7fd4a8; --warn:#f5b47e; --bad:#f58d8d;
+    --line:rgba(164,156,204,.18); --radius:18px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #2a2456 0%, transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, #35204a 0%, transparent 55%),
+      var(--ink);
+    color:var(--text); font-family:'Karla',system-ui,sans-serif; line-height:1.6;
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:36px 20px 80px;position:relative;z-index:1}
+  .stars{position:fixed;inset:0;pointer-events:none;z-index:0}
+  .stars span{position:absolute;width:2px;height:2px;border-radius:50%;background:#cfc8f0;opacity:.3;animation:tw 4s ease-in-out infinite}
+  @keyframes tw{0%,100%{opacity:.12}50%{opacity:.45}}
+  @media (prefers-reduced-motion:reduce){.stars span{animation:none}*{transition:none!important}}
+
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:10px}
+  h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:clamp(28px,6vw,42px);line-height:1.12;margin-bottom:8px}
+  h1 em{font-style:italic;color:var(--dawn)}
+  .sub{color:var(--text-dim);font-size:15px;max-width:58ch}
+
+  /* upload zone */
+  .drop{
+    display:block;width:100%;
+    margin-top:26px;border:1.5px dashed rgba(181,126,245,.45);border-radius:var(--radius);
+    background:linear-gradient(180deg,rgba(181,126,245,.06),transparent);
+    padding:26px;text-align:center;cursor:pointer;transition:border-color .2s, background .2s;
+  }
+  .drop:hover,.drop.over{border-color:var(--rem);background:rgba(181,126,245,.1)}
+  .drop b{font-family:'Fraunces',serif;font-size:17px;display:block}
+  .drop p{color:var(--text-dim);font-size:13.5px;margin-top:4px;display:block}
+  .drop input{display:none}
+  .err{margin-top:12px;color:var(--bad);font-size:13.5px;display:none}
+
+  /* history strip */
+  .hist{margin-top:22px}
+  .hist-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+  .hist-head h3{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--text-dim)}
+  .hist-head button{background:none;border:none;color:var(--text-faint);font-family:inherit;font-size:12px;cursor:pointer;text-decoration:underline}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    border:1px solid var(--line);background:var(--panel);color:var(--text);
+    border-radius:100px;padding:6px 14px;font-family:inherit;font-size:13px;cursor:pointer;
+    transition:border-color .2s;
+  }
+  .chip:hover{border-color:var(--rem)}
+  .chip.sel{border-color:var(--rem);background:rgba(181,126,245,.14)}
+  .chip small{color:var(--text-faint);margin-left:6px}
+  .empty-hist{color:var(--text-faint);font-size:13px}
+
+  /* trend */
+  .trend{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,var(--panel),var(--ink-2));padding:16px 18px;display:none}
+  .trend h4{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px}
+  .trend svg{width:100%;height:90px;display:block}
+  .trend .tl{display:flex;gap:16px;font-size:12px;color:var(--text-dim);margin-top:6px}
+  .trend .tl i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  /* report */
+  #report{display:none;margin-top:44px}
+  section{margin-top:52px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .sec-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:23px}
+  .sec-head .hint{font-size:12.5px;color:var(--text-faint)}
+  .sec-sub{color:var(--text-dim);font-size:14.5px;margin-bottom:20px;max-width:60ch}
+
+  .score-row{display:flex;align-items:center;gap:26px;margin:8px 0 0;flex-wrap:wrap}
+  .dial{position:relative;width:142px;height:142px;flex:none}
+  .dial svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .dial .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .dial .num b{font-family:'Fraunces',serif;font-size:42px;font-weight:700;line-height:1}
+  .dial .num small{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);margin-top:4px}
+  .score-copy{flex:1;min-width:240px}
+  .score-copy h2{font-family:'Fraunces',serif;font-weight:600;font-size:20px;margin-bottom:6px}
+  .score-copy p{color:var(--text-dim);font-size:14.5px}
+  .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;padding:3px 10px;border-radius:100px;margin-left:8px;vertical-align:2px;background:rgba(245,180,126,.14);color:var(--warn);border:1px solid rgba(245,180,126,.3)}
+
+  .band{display:flex;height:72px;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .band button{border:none;cursor:pointer;position:relative;transition:filter .2s;outline-offset:-3px;min-width:8px}
+  .band button:hover,.band button:focus-visible{filter:brightness(1.22)}
+  .band button:focus-visible{outline:2px solid var(--text)}
+  .band button.active{filter:brightness(1.28) saturate(1.1)}
+  .band button::after{content:attr(data-label);position:absolute;left:10px;bottom:8px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.85);white-space:nowrap}
+  @media (max-width:560px){.band button::after{display:none}}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--text-dim)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  .stage-detail{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,var(--panel),var(--ink-2));padding:24px;display:none}
+  .stage-detail.show{display:block;animation:rise .3s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .sd-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .sd-top h3{font-family:'Fraunces',serif;font-size:19px;font-weight:600}
+  .sd-top .amt{font-family:'Fraunces',serif;font-size:19px}
+  .sd-verdict{font-size:13px;font-weight:700;margin-bottom:12px}
+  .sd-verdict.ok{color:var(--good)} .sd-verdict.note{color:var(--warn)} .sd-verdict.flag{color:var(--bad)}
+  .stage-detail p{color:var(--text-dim);font-size:14.5px;margin-bottom:10px}
+  .stage-detail p:last-child{margin-bottom:0}
+  .range{position:relative;height:8px;border-radius:100px;background:var(--panel-2);margin:16px 0 28px}
+  .range .zone{position:absolute;top:0;bottom:0;border-radius:100px;background:rgba(127,212,168,.25)}
+  .range .you{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2.5px solid var(--ink)}
+  .range .lbl{position:absolute;top:14px;font-size:11px;color:var(--text-faint);transform:translateX(-50%);white-space:nowrap}
+
+  .spot{border:1px solid rgba(181,126,245,.4);border-radius:var(--radius);background:radial-gradient(500px 200px at 90% 0%,rgba(181,126,245,.16),transparent 70%),linear-gradient(180deg,var(--panel),var(--ink-2));padding:26px}
+  .spot .eyebrow{color:var(--rem)}
+  .spot h2{font-family:'Fraunces',serif;font-size:23px;font-weight:600;margin-bottom:10px}
+  .spot p{color:var(--text-dim);font-size:14.5px;margin-bottom:10px;max-width:62ch}
+  .spot .big{font-family:'Fraunces',serif;font-size:38px;color:var(--rem);font-weight:700}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:14px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,var(--panel),var(--ink-2));padding:18px 18px 16px;cursor:pointer;text-align:left;color:var(--text);font-family:inherit;transition:border-color .2s,transform .2s}
+  .card:hover,.card:focus-visible{border-color:rgba(181,126,245,.5);transform:translateY(-2px)}
+  .card:focus-visible{outline:2px solid var(--rem);outline-offset:2px}
+  .card .k{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px}
+  .card .v{font-family:'Fraunces',serif;font-size:25px;font-weight:600;line-height:1.1}
+  .card .v small{font-size:14px;color:var(--text-dim);font-family:'Karla',sans-serif;font-weight:500}
+  .card .tag{margin-top:10px;font-size:12px;font-weight:700}
+  .tag.ok{color:var(--good)} .tag.note{color:var(--warn)} .tag.flag{color:var(--bad)} .tag.na{color:var(--text-faint)}
+  .card .exp{max-height:0;overflow:hidden;transition:max-height .35s ease,margin .35s ease;color:var(--text-dim);font-size:13.5px}
+  .card.open .exp{max-height:380px;margin-top:12px}
+  .card .more{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+  .card.open .more{display:none}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--text-faint);font-size:12.5px;max-width:62ch}
+  .saved-note{font-size:12.5px;color:var(--good);margin-top:10px;display:none}
+
+  /* sync bar */
+  .sync{
+    margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    font-size:13px;color:var(--text-dim);
+    border:1px solid var(--line);border-radius:100px;padding:8px 14px;
+    background:var(--panel);
+  }
+  .sync .dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);flex:none}
+  .sync.on .dot{background:var(--good)}
+  .sync button{
+    background:none;border:1px solid var(--line);color:var(--text);
+    font-family:inherit;font-size:12.5px;border-radius:100px;padding:4px 12px;cursor:pointer;
+    margin-left:auto;transition:border-color .2s;
+  }
+  .sync button:hover{border-color:var(--rem)}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<main class="wrap">
+
+  <header>
+    <div class="eyebrow">Sleep Lab · Garmin Vivoactive 6</div>
+    <h1>Drop in a night.<br>Get it <em>explained</em>.</h1>
+    <p class="sub">Export the Sleep.csv from Garmin Connect after any night and upload it here. Every night you add is saved, so trends build over time.</p>
+  </header>
+
+  <label class="drop" id="drop">
+    <b>Upload Sleep.csv</b>
+    <p>Tap to choose a file, or drag it here</p>
+    <input type="file" id="file" accept=".csv,text/csv">
+  </label>
+  <div class="err" id="err"></div>
+  <div class="saved-note" id="savedNote">● Night saved to your history</div>
+  <div class="sync" id="syncBar" style="display:none">
+    <span class="dot"></span><span id="syncMsg">Cloud sync: off — nights stay on this device</span>
+    <button id="syncBtn">Sign in to sync</button>
+  </div>
+
+  <div class="hist">
+    <div class="hist-head">
+      <h3>Your nights</h3>
+      <button id="clearBtn" style="display:none">Clear history</button>
+    </div>
+    <div class="chips" id="chips"><span class="empty-hist">No nights saved yet — your first upload starts the log.</span></div>
+    <div class="trend" id="trend">
+      <h4>Trend</h4>
+      <svg id="trendSvg" viewBox="0 0 600 90" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="tl">
+        <span><i style="background:var(--dawn)"></i>Sleep score</span>
+        <span><i style="background:var(--rem)"></i>REM %</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="report"></div>
+
+  <footer>
+    A note on trust: wrist-based sleep staging is a good estimator, not a lab — most useful for <b>trends over weeks</b>, not any single night. Nothing here is medical advice; if a metric consistently looks off (like SpO₂ dipping low night after night), that's a conversation for a GP.
+  </footer>
+</main>
+
+<script>
+/* ---------------- starfield ---------------- */
+(() => { const s=document.getElementById('stars');
+  for(let i=0;i<44;i++){const d=document.createElement('span');
+    d.style.left=Math.random()*100+'vw'; d.style.top=Math.random()*100+'vh';
+    d.style.animationDelay=(Math.random()*4)+'s'; d.style.opacity=.1+Math.random()*.3; s.appendChild(d);}
+})();
+
+/* ---------------- storage: Claude artifact storage → localStorage → memory ---------------- */
+const mem = {};
+const hasLS = (()=>{ try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; }catch(e){ return false; } })();
+const store = {
+  async set(k,v){
+    try{ if(window.storage) return await window.storage.set(k,JSON.stringify(v)); }catch(e){}
+    if(hasLS){ localStorage.setItem('sleeplab:'+k, JSON.stringify(v)); return true; }
+    mem[k]=v; return true;
+  },
+  async get(k){
+    try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
+    if(hasLS){ const r=localStorage.getItem('sleeplab:'+k); return r?JSON.parse(r):null; }
+    return mem[k]??null;
+  },
+  async del(k){
+    try{ if(window.storage) return await window.storage.delete(k); }catch(e){}
+    if(hasLS){ localStorage.removeItem('sleeplab:'+k); return; }
+    delete mem[k];
+  },
+  async list(p){
+    try{ if(window.storage){ const r=await window.storage.list(p); return r?r.keys:[]; } }catch(e){}
+    if(hasLS){ return Object.keys(localStorage).filter(k=>k.startsWith('sleeplab:'+p)).map(k=>k.slice('sleeplab:'.length)); }
+    return Object.keys(mem).filter(k=>k.startsWith(p));
+  }
+};
+
+/* ---------------- cloud sync (Supabase) ----------------
+   To enable: create a free Supabase project, run the SQL in the README,
+   then paste your project URL and anon key below and re-commit this file. */
+const SUPABASE_URL = '';      // e.g. 'https://abcdefgh.supabase.co'
+const SUPABASE_ANON_KEY = ''; // the long "anon public" key
+
+const sb = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let sbUser = null;
+
+const syncBar=document.getElementById('syncBar'), syncMsg=document.getElementById('syncMsg'), syncBtn=document.getElementById('syncBtn');
+if(sb) syncBar.style.display='flex';
+
+function setSyncUI(){
+  if(!sb) return;
+  if(sbUser){ syncBar.classList.add('on'); syncMsg.textContent='Cloud sync: on · '+(sbUser.email||'signed in'); syncBtn.textContent='Sign out'; }
+  else { syncBar.classList.remove('on'); syncMsg.textContent='Cloud sync: off — nights stay on this device'; syncBtn.textContent='Sign in to sync'; }
+}
+
+async function cloudPush(d){
+  if(!sb||!sbUser||!d) return;
+  try{ await sb.from('nights').upsert({user_id:sbUser.id, date:d.date, data:d}); }
+  catch(e){ console.error('cloud push failed', e); }
+}
+async function cloudDeleteAll(){
+  if(!sb||!sbUser) return;
+  try{ await sb.from('nights').delete().eq('user_id', sbUser.id); }
+  catch(e){ console.error('cloud delete failed', e); }
+}
+async function cloudMerge(){
+  if(!sb||!sbUser) return;
+  try{
+    /* pull remote nights into local */
+    const {data,error}=await sb.from('nights').select('date,data');
+    if(error) throw error;
+    for(const row of (data||[])){ if(row.data) await store.set('night:'+row.date, row.data); }
+    /* push any local-only nights up */
+    const keys=await store.list('night:');
+    for(const k of keys){ const n=await store.get(k); if(n) await cloudPush(n); }
+  }catch(e){ console.error('cloud merge failed', e); }
+}
+
+if(sb){
+  syncBtn.addEventListener('click', async ()=>{
+    if(sbUser){ await sb.auth.signOut(); return; }
+    const email=prompt('Enter your email — Supabase will send you a one-tap sign-in link:');
+    if(!email) return;
+    const {error}=await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.href.split('#')[0]}});
+    if(error){ showErr('Sign-in failed: '+error.message); }
+    else { syncMsg.textContent='Check your email for the sign-in link…'; }
+  });
+  sb.auth.onAuthStateChange(async (_event, session)=>{
+    sbUser = session?.user || null;
+    setSyncUI();
+    if(sbUser){ await cloudMerge(); await refreshHistory(); }
+  });
+}
+
+/* ---------------- CSV parsing ---------------- */
+function normKey(k){ return k.replace(/^\uFEFF/,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function toMin(s){ // "7h 53m" | "57m" | "1h"
+  if(!s) return null;
+  const h=s.match(/(\d+)\s*h/), m=s.match(/(\d+)\s*m/);
+  if(!h&&!m) return null;
+  return (h?+h[1]*60:0)+(m?+m[1]:0);
+}
+function num(s){ if(s==null) return null; const m=String(s).match(/-?\d+(\.\d+)?/); return m?parseFloat(m[0]):null; }
+function fmtMin(mn){ if(mn==null) return '—'; const h=Math.floor(mn/60),m=mn%60; return h?`${h}h ${m}m`:`${m}m`; }
+
+function parseSleepCSV(text){
+  const map={};
+  text.split(/\r?\n/).forEach(line=>{
+    const i=line.indexOf(','); if(i<1) return;
+    const k=normKey(line.slice(0,i)), v=line.slice(i+1).trim().replace(/^['"]+|['"]+$/g,'');
+    if(v!=='') map[k]=v;
+  });
+  const g=(...keys)=>{ for(const k of keys){ if(map[k]!=null) return map[k]; } return null; };
+
+  const d={};
+  d.date  = g('date');
+  d.score = num(g('sleepscore'));
+  d.quality = g('quality');
+  d.total = toMin(g('sleepduration'));
+  d.deep  = toMin(g('deepsleepduration'));
+  d.light = toMin(g('lightsleepduration'));
+  d.rem   = toMin(g('remduration'));
+  d.awake = toMin(g('awaketime'));
+  d.stress= num(g('stressavg'));
+  d.restless = num(g('restlessmoments'));
+  d.hrAvg = num(g('avgovernightheartrate'));
+  d.hrRest= num(g('restingheartrate'));
+  d.bb    = num(g('bodybatterychange'));
+  d.spo2  = num(g('avgspo2','avgspo'));
+  d.spo2Low = num(g('lowestspo2','lowestspo'));
+  d.resp  = num(g('avgrespiration'));
+  d.respLow = num(g('lowestrespiration'));
+  d.hrv   = num(g('avgovernighthrv'));
+  d.hrv7  = g('7davghrv','davghrv');
+  d.breathVar = g('breathingvariations');
+
+  if(d.total==null && d.deep!=null) d.total=(d.deep||0)+(d.light||0)+(d.rem||0);
+  if(!d.date && (d.total==null||d.score==null)) return null; // not a sleep export
+  if(!d.date) d.date='unknown-'+Date.now();
+  d.inBed = d.total!=null ? d.total+(d.awake||0) : null;
+  d.eff   = (d.total&&d.inBed) ? Math.round(d.total/d.inBed*1000)/10 : null;
+  d.pct = {};
+  if(d.total){ for(const s of ['deep','light','rem']) d.pct[s]= d[s]!=null?Math.round(d[s]/d.total*1000)/10:null; }
+  return d;
+}
+
+/* ---------------- verdict engine ---------------- */
+function inZone(v,lo,hi){ return v>=lo&&v<=hi; }
+function stageVerdict(stage,pct){
+  if(pct==null) return ['na','Not recorded'];
+  if(stage==='rem')  return inZone(pct,20,25)?['ok','Right in the 20–25% sweet spot']:inZone(pct,15,30)?['note',`Just ${pct<20?'below':'above'} the typical 20–25%`]:['flag','Well outside the typical 20–25% — watch the trend'];
+  if(stage==='deep') return inZone(pct,13,23)?['ok','Within the typical 13–23% range']:inZone(pct,9,28)?['note',`A little ${pct<13?'low':'high'} vs the typical 13–23%`]:['flag','Well outside the typical range — watch the trend'];
+  if(stage==='light')return inZone(pct,45,60)?['ok','Within the typical ~45–60%']:pct<70&&pct>38?['note',`Slightly ${pct<45?'low':'high'} vs typical (~45–60%) — usually harmless`]:['flag','Unusual proportion — watch the trend'];
+  return ['na',''];
+}
+function awakeVerdict(d){
+  if(d.eff==null) return ['na','Not recorded'];
+  if(d.eff>=90) return ['ok',`Sleep efficiency ${d.eff}% — very good`];
+  if(d.eff>=85) return ['note',`Efficiency ${d.eff}% — decent, a touch fragmented`];
+  return ['flag',`Efficiency ${d.eff}% — a fragmented night`];
+}
+function scoreLine(d){
+  if(d.score==null) return 'No score in this export.';
+  const band = d.score>=90?'Excellent':d.score>=80?'Good':d.score>=60?'Fair':'Poor';
+  let line = `Garmin blends duration, stage balance, stress, and restlessness into one number. ${d.score} sits in their “${band}” band.`;
+  if(d.eff!=null && d.eff<90 && d.score<80) line += ` The main drag on the number looks like the ${fmtMin(d.awake)} of awake time rather than the sleep itself.`;
+  else if(d.score>=80) line += ' A night worth repeating.';
+  return line;
+}
+
+/* ---------------- stage copy ---------------- */
+const STAGE_META = {
+  deep:{ name:'Deep sleep', color:'#2e6ff2', zone:[13,23], max:32,
+    body:d=>[`Deep sleep is the physical repair shift — growth hormone release, muscle and tissue rebuild, immune maintenance. It's the hardest stage to wake from; if the baby cries mid-deep-sleep, that underwater grogginess is why.`,
+    `Most deep sleep lands in the first half of the night, so a consistent bedtime protects it. Big training days (a hard BikeErg session, a sweaty gig behind the kit) often push it up the following night.`]},
+  light:{ name:'Light sleep', color:'#6f7fc9', zone:[45,60], max:82,
+    body:d=>[`Light sleep is the connective tissue of the night — the transition stage between cycles where heart rate and breathing settle, with some memory processing too. It's supposed to be the biggest block.`,
+    d.eff!=null&&d.eff<92?`A higher light-sleep share often just reflects fragmentation — more wake-ups mean more transitions. Fewer interruptions and this drifts down on its own.`:`Nothing to manage here; it scales naturally with total sleep.`]},
+  rem:{ name:'REM sleep', color:'#b57ef5', zone:[20,25], max:36,
+    body:d=>[`REM is the mental shift: memory consolidation, learning, emotional processing, and nearly all vivid dreaming. Brain activity looks close to waking while the body stays paralysed.`,
+    `REM concentrates in the last third of the night — the fastest way to lose it is cutting sleep short at the morning end. Protecting the back half of the night protects REM.`]},
+  awake:{ name:'Awake time', color:'#d9975c', zone:null, max:null,
+    body:d=>[`Everyone surfaces briefly between sleep cycles — most wake-ups are too short to remember. What matters is the total and the trend.`,
+    d.restless!=null?`Paired with ${d.restless} restless moments, this tells the fragmentation story for the night. Common culprits: room temperature, late screens, caffeine after noon — and, of course, a baby with opinions about your schedule.`:`Common culprits: room temperature, late screens, caffeine after noon.`]}
+};
+
+/* ---------------- vitals builder ---------------- */
+function buildVitals(d){
+  const V=[];
+  const add=(k,v,u,tag,exp)=>{ if(v!=null&&v!=='') V.push({k,v,u,tag,exp}); };
+
+  if(d.hrRest!=null) add('Resting heart rate', d.hrRest,'bpm',
+    d.hrRest<=62?['ok','Good']:d.hrRest<=72?['ok','Normal']:['note','On the higher side'],
+    `Your lowest stable heart rate of the night. Downward trends over months usually mean improving fitness; a sudden jump of 5+ bpm above your normal often means illness, poor recovery, or alcohol.`);
+  if(d.hrAvg!=null) add('Avg overnight heart rate', d.hrAvg,'bpm',
+    (d.hrRest!=null&&d.hrAvg-d.hrRest>12)?['note','Large gap vs resting']:['ok','Looks normal'],
+    `The average across the whole night — it sits naturally above resting because heart rate rises during REM and brief wake-ups. A gap under ~10 bpm vs resting is unremarkable.`);
+  if(d.hrv!=null) add('Avg overnight HRV', d.hrv,'ms',
+    (d.hrv7&&!/no status/i.test(d.hrv7))?['ok','Compare to your baseline']:['na','Building your baseline'],
+    `Heart rate variability — timing differences between heartbeats. Higher generally means “rest and recover” mode, but HRV is personal: the raw number means little in isolation. ${(d.hrv7&&!/no status/i.test(d.hrv7))?`Your 7-day average is ${d.hrv7} — the useful signal is whether tonight sits above or below that.`:`Garmin needs ~3 weeks of nights to learn YOUR normal before it grades this.`}`);
+  if(d.spo2!=null) add('Avg SpO₂', d.spo2,'%',
+    d.spo2>=95?['ok', d.spo2Low!=null?`Fine (dipped to ${d.spo2Low}%)`:'Fine']:d.spo2>=93?['note','A touch low']:['flag','Low — worth watching'],
+    `Blood oxygen saturation; 95–100% is the normal band. ${d.spo2Low!=null&&d.spo2Low<92?`The dip to ${d.spo2Low}% is worth zero alarm as a one-off — wrist sensors misread during movement and arm position causes dips. If lows under 90% became a nightly pattern, especially with snoring or daytime tiredness, mention it to a GP.`:`Brief dips are normal; the average is what matters.`}`);
+  if(d.resp!=null) add('Avg respiration', d.resp,'brpm',
+    inZone(d.resp,12,20)?['ok','Textbook normal']:['note','Outside typical 12–20'],
+    `Breaths per minute while asleep; 12–20 is the normal adult range.${d.respLow!=null?` Your low of ${d.respLow} is fine.`:''} Mostly a stability signal — it barely moves night to night unless illness or congestion is going on.`);
+  if(d.bb!=null) add('Body Battery', (d.bb>0?'+':'')+d.bb,'',
+    d.bb>=50?['ok','Strong recharge']:d.bb>=30?['note','Partial recharge']:['flag','Poor recharge'],
+    `Garmin's recovery gauge (0–100), drained by stress and effort, recharged by restful sleep. Think of it as “how much fuel the night put back in the tank.”`);
+  if(d.stress!=null) add('Overnight stress', d.stress,'',
+    d.stress<=25?['ok','Low — as it should be']:d.stress<=40?['note','Elevated for sleep']:['flag','High for sleep'],
+    `Estimated from HRV; 0–25 counts as “rest.” Nights of poor recovery (illness, late alcohol, overtraining) show up here as sleep-stress averages in the 30s–50s.`);
+  if(d.restless!=null) add('Restless moments', d.restless,'',
+    d.restless<=25?['ok','Settled night']:d.restless<=45?['note','Worth watching']:['flag','Very restless'],
+    `Times the watch detected significant movement. No strict “normal,” but read it alongside awake time — together they describe how fragmented the night was. This is usually the most fixable number on the page.`);
+  if(d.breathVar) add('Breathing variations', d.breathVar,'',
+    /minimal|none|low/i.test(d.breathVar)?['ok','The best result']:['note','Worth watching'],
+    `Screens for irregular breathing patterns overnight — sustained variations can be associated with things like sleep apnoea. “Minimal” is exactly what you want to see.`);
+  return V;
+}
+
+/* ---------------- render ---------------- */
+const report=document.getElementById('report');
+function icon(t){ return t==='ok'?'●':t==='note'?'◐':t==='flag'?'▲':'○'; }
+
+function render(d){
+  const remV=stageVerdict('rem',d.pct.rem);
+  const dateNice = /^\d{4}-\d{2}-\d{2}$/.test(d.date)
+    ? new Date(d.date+'T12:00:00').toLocaleDateString('en-AU',{weekday:'long', day:'numeric', month:'long', year:'numeric'})
+    : d.date;
+
+  report.innerHTML = `
+    <div class="eyebrow">Night of ${dateNice}</div>
+    <div class="score-row">
+      <div class="dial" role="img" aria-label="Sleep score ${d.score??'unknown'}">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--panel-2)" stroke-width="10"/>
+          <circle class="arc" cx="60" cy="60" r="52" fill="none" stroke="url(#dg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+          <defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b57ef5"/><stop offset="1" stop-color="#ffd9a8"/></linearGradient></defs>
+        </svg>
+        <div class="num"><b>${d.score??'—'}</b><small>Sleep score</small></div>
+      </div>
+      <div class="score-copy">
+        <h2>${fmtMin(d.total)} asleep ${d.quality?`<span class="pill">Garmin says “${d.quality}”</span>`:''}</h2>
+        <p>${scoreLine(d)}${d.inBed?` You were in bed about ${fmtMin(d.inBed)} in total.`:''}</p>
+      </div>
+    </div>
+
+    <section>
+      <div class="sec-head"><h2>The shape of the night</h2><span class="hint">tap a segment</span></div>
+      <p class="sec-sub">Each block is sized to its share of the night. Light sleep is supposed to be the biggest block — that's normal architecture, not a problem.</p>
+      <div class="band" role="tablist" aria-label="Sleep stages">
+        ${['deep','light','rem','awake'].map(s=>{
+          const v = s==='awake'?d.awake:d[s];
+          if(v==null||v===0) return '';
+          return `<button data-stage="${s}" data-label="${STAGE_META[s].name.split(' ')[0]}" role="tab" aria-selected="false" style="flex-grow:${v};background:linear-gradient(180deg,${STAGE_META[s].color},${STAGE_META[s].color}cc)">​</button>`;
+        }).join('')}
+      </div>
+      <div class="legend">
+        ${['deep','light','rem','awake'].map(s=>{
+          const v = s==='awake'?d.awake:d[s];
+          if(v==null) return '';
+          return `<span><i style="background:${STAGE_META[s].color}"></i>${STAGE_META[s].name.split(' ')[0]} ${fmtMin(v)}</span>`;
+        }).join('')}
+      </div>
+      <div class="stage-detail" id="stageDetail" role="tabpanel"></div>
+    </section>
+
+    ${d.pct.rem!=null?`
+    <section>
+      <div class="spot">
+        <div class="eyebrow">The headline stage</div>
+        <h2>REM: <span class="big">${d.pct.rem}%</span> of sleep</h2>
+        <p><b style="color:var(--text)">${fmtMin(d.rem)}</b> of memory consolidation, emotional processing, and dreaming. The healthy adult range is roughly <b style="color:var(--text)">20–25%</b> — ${remV[0]==='ok'?'you landed inside it.':remV[1].toLowerCase()+'.'}</p>
+        <p>REM is back-loaded into the final hours of the night, so the surest way to protect it is protecting the morning end of your sleep.</p>
+      </div>
+    </section>`:''}
+
+    <section>
+      <div class="sec-head"><h2>Overnight vitals</h2><span class="hint">tap a card to expand</span></div>
+      <p class="sec-sub">Heart, breathing, and recovery — decoded.</p>
+      <div class="grid" id="vitals"></div>
+    </section>
+  `;
+  report.style.display='block';
+
+  /* dial */
+  requestAnimationFrame(()=>{ const a=report.querySelector('.arc');
+    if(a&&d.score!=null){ a.style.transition='stroke-dashoffset 1.2s cubic-bezier(.2,.7,.2,1)'; a.style.strokeDashoffset=(326.7*(1-d.score/100)).toFixed(1);} });
+
+  /* stage clicks */
+  const detail=report.querySelector('#stageDetail');
+  report.querySelectorAll('.band button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key=btn.dataset.stage, meta=STAGE_META[key];
+      const active=btn.classList.contains('active');
+      report.querySelectorAll('.band button').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-selected','false');});
+      if(active){detail.classList.remove('show');return;}
+      btn.classList.add('active');btn.setAttribute('aria-selected','true');
+      const pct = key==='awake'?null:d.pct[key];
+      const verdict = key==='awake'?awakeVerdict(d):stageVerdict(key,pct);
+      const amt = key==='awake'?d.awake:d[key];
+      let rangeHtml='';
+      if(meta.zone&&pct!=null){
+        const l=(meta.zone[0]/meta.max*100).toFixed(1), w=((meta.zone[1]-meta.zone[0])/meta.max*100).toFixed(1);
+        const you=Math.min(pct/meta.max*100,99).toFixed(1);
+        rangeHtml=`<div class="range" aria-hidden="true">
+          <div class="zone" style="left:${l}%;width:${w}%"></div>
+          <div class="you" style="left:${you}%;background:${meta.color}"></div>
+          <div class="lbl" style="left:${l}%">${meta.zone[0]}%</div>
+          <div class="lbl" style="left:${(+l + +w).toFixed(1)}%">${meta.zone[1]}%</div>
+          <div class="lbl" style="left:${you}%;top:-22px;color:${meta.color};font-weight:700">you · ${pct}%</div>
+        </div>`;
+      }
+      detail.innerHTML=`
+        <div class="sd-top"><h3 style="color:${meta.color}">${meta.name}</h3><span class="amt">${fmtMin(amt)}${pct!=null?` <span style="color:var(--text-faint);font-size:14px">· ${pct}% of sleep</span>`:''}</span></div>
+        <div class="sd-verdict ${verdict[0]}">${icon(verdict[0])} ${verdict[1]}</div>
+        ${rangeHtml}
+        ${meta.body(d).map(p=>`<p>${p}</p>`).join('')}`;
+      detail.classList.add('show');
+      detail.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+  });
+
+  /* vitals */
+  const grid=report.querySelector('#vitals');
+  buildVitals(d).forEach(v=>{
+    const c=document.createElement('button'); c.className='card'; c.setAttribute('aria-expanded','false');
+    c.innerHTML=`<div class="k">${v.k}</div><div class="v">${v.v} <small>${v.u}</small></div>
+      <div class="tag ${v.tag[0]}">${icon(v.tag[0])} ${v.tag[1]}</div>
+      <div class="exp">${v.exp}</div><div class="more">Tap to expand</div>`;
+    c.addEventListener('click',()=>{ const o=c.classList.toggle('open'); c.setAttribute('aria-expanded',String(o)); });
+    grid.appendChild(c);
+  });
+}
+
+/* ---------------- history ---------------- */
+let selectedDate=null;
+async function refreshHistory(){
+  const keys=(await store.list('night:')).sort();
+  const chips=document.getElementById('chips');
+  document.getElementById('clearBtn').style.display = keys.length?'inline':'none';
+  if(!keys.length){ chips.innerHTML='<span class="empty-hist">No nights saved yet — your first upload starts the log.</span>'; document.getElementById('trend').style.display='none'; return; }
+  const nights=[];
+  for(const k of keys){ const n=await store.get(k); if(n) nights.push(n); }
+  chips.innerHTML='';
+  nights.forEach(n=>{
+    const b=document.createElement('button'); b.className='chip'+(n.date===selectedDate?' sel':'');
+    const dd=/^\d{4}-\d{2}-\d{2}$/.test(n.date)?new Date(n.date+'T12:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short'}):n.date;
+    b.innerHTML=`${dd}<small>${n.score??'—'}</small>`;
+    b.addEventListener('click',()=>{ selectedDate=n.date; render(n); refreshHistory(); report.scrollIntoView({behavior:'smooth',block:'start'}); });
+    chips.appendChild(b);
+  });
+  /* trend */
+  const t=document.getElementById('trend'), svg=document.getElementById('trendSvg');
+  if(nights.length>=2){
+    t.style.display='block';
+    const W=600,H=90,P=8;
+    const line=(vals,color,min,max)=>{
+      const pts=vals.map((v,i)=>{
+        const x=P+i*(W-2*P)/(vals.length-1);
+        const y=v==null?null:H-P-((v-min)/(max-min))*(H-2*P);
+        return y==null?null:`${x},${y}`;
+      }).filter(Boolean).join(' ');
+      return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`+
+        vals.map((v,i)=>{ if(v==null)return ''; const x=P+i*(W-2*P)/(vals.length-1), y=H-P-((v-min)/(max-min))*(H-2*P);
+          return `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}"/>`; }).join('');
+    };
+    svg.innerHTML = line(nights.map(n=>n.score),'#ffd9a8',40,100) + line(nights.map(n=>n.pct?.rem??null),'#b57ef5',5,40);
+  } else t.style.display='none';
+}
+
+document.getElementById('clearBtn').addEventListener('click', async ()=>{
+  if(!confirm('Delete all saved nights?')) return;
+  const keys=await store.list('night:');
+  for(const k of keys) await store.del(k);
+  await cloudDeleteAll();
+  selectedDate=null; report.style.display='none'; refreshHistory();
+});
+
+/* ---------------- upload wiring ---------------- */
+const drop=document.getElementById('drop'), fileIn=document.getElementById('file'), err=document.getElementById('err'), savedNote=document.getElementById('savedNote');
+function showErr(msg){ err.textContent=msg; err.style.display='block'; setTimeout(()=>err.style.display='none',6000); }
+async function handleFile(f){
+  err.style.display='none'; savedNote.style.display='none';
+  if(!f) return;
+  const text=await f.text();
+  const d=parseSleepCSV(text);
+  if(!d){ showErr('That doesn\'t look like a Garmin Sleep.csv — expected rows like "Sleep Duration,7h 53m". Try the export from Garmin Connect\'s sleep page.'); return; }
+  await store.set('night:'+d.date, d);
+  cloudPush(d);
+  selectedDate=d.date;
+  render(d);
+  savedNote.style.display='block';
+  refreshHistory();
+  report.scrollIntoView({behavior:'smooth',block:'start'});
+}
+fileIn.addEventListener('change',e=>handleFile(e.target.files[0]));
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
+
+/* ---------------- seed with the first tracked night ---------------- */
+(async ()=>{
+  const existing=await store.get('night:2026-07-02');
+  if(!existing){
+    const seed=parseSleepCSV(
+`Date,2026-07-02
+Sleep Duration,7h 53m
+Sleep Score,78
+Quality,Fair
+Stress Avg,23
+Deep Sleep Duration,1h 9m
+Light Sleep Duration,5h 1m
+REM Duration,1h 43m
+Awake Time,57m
+Breathing Variations,Minimal
+Restless Moments,32
+Avg Overnight Heart Rate,64 bpm
+Resting Heart Rate,58 bpm
+Body Battery Change,'+63
+Avg SpO2,95%
+Lowest SpO2,90%
+Avg Respiration,14 brpm
+Lowest Respiration,12 brpm
+Avg Overnight HRV,35 ms
+7d Avg HRV,No Status`);
+    if(seed) await store.set('night:'+seed.date, seed);
+  }
+  await refreshHistory();
+})();
+</script>
+</body>
+</html>
